@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Christmas Card</title>
+    <style>
+      html,body{height:100%;margin:0;background:#071026;overflow:hidden}
+      canvas{position:fixed;inset:0;display:block}
+    </style>
+  </head>
+  <body>
+    <canvas id="snowCanvas"></canvas>
+    <script>
+      const canvas = document.getElementById('snowCanvas');
+      const ctx = canvas.getContext('2d');
+      let W, H;
+      function resize(){W = canvas.width = innerWidth; H = canvas.height = innerHeight}
+      window.addEventListener('resize', resize);
+      resize();
+
+      function rand(min, max){ return Math.random() * (max - min) + min }
+      const flakes = [];
+      function createFlake(){
+        return {
+          x: rand(0, W),
+          y: rand(-H, 0),
+          r: rand(0.5, 3.5),
+          d: rand(0.5, 2.0),
+          vx: rand(-0.5, 0.5)
+        }
+      }
+      for(let i=0;i<160;i++) flakes.push(createFlake());
+
+      function update(){
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        for(const f of flakes){
+          f.x += f.vx;
+          f.y += f.d;
+          if(f.y > H){ f.y = rand(-50, 0); f.x = rand(0, W); }
+          if(f.x > W) f.x = 0;
+          if(f.x < 0) f.x = W;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        requestAnimationFrame(update);
+      }
+      update();
+    </script>
+  </body>
+</html>
