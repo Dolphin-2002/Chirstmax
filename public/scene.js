@@ -1,9 +1,9 @@
 // scene.js - extracted from index.html
 (function(){
   // --- Helpers and config ---
-  // Prefer relative public paths first so the site works from preview subdomains or subpaths
-  const IMAGE_PATH_PREFIX = './images'; // prefer public/images
-  const CANDIDATE_PATHS = [IMAGE_PATH_PREFIX, 'images', './images', '/images', '/src/images', '/'];
+  // Use absolute public paths for production
+  const IMAGE_PATH_PREFIX = '/images'; // prefer public/images
+  const CANDIDATE_PATHS = [IMAGE_PATH_PREFIX, '/src/images', '/images', '/'];
   function resolveUrl(name){
     const urls = [];
     for(const p of CANDIDATE_PATHS){
@@ -33,6 +33,7 @@
   }
 
   const imagesToPreload = ['1.png','2.png','3.png','4.png','5.png','6.png'];
+  // if 5.png is missing, we will also try 5.jpg via resolveUrl fallback
 
   // --- Canvas snow with twinkle (optimized for mobile) ---
   const canvas = document.getElementById('snowCanvas');
@@ -85,8 +86,8 @@
   }
 
   // Ambient audio using provided MP3 (tries user file name first, then a corrected spelling)
-  // Prefer relative sounds path
-  let ambientAudio = new Audio('./sounds/wewishyoumerrychirstmas.mp3');
+  // Use absolute sounds path
+  let ambientAudio = new Audio('/sounds/wewishyoumerrychirstmas.mp3');
   ambientAudio.loop = true;
   ambientAudio.preload = 'auto';
   ambientAudio.volume = 0.65;
@@ -94,7 +95,7 @@
   ambientAudio.addEventListener('error', function onAudioError(){
     ambientAudio.removeEventListener('error', onAudioError);
     try{
-      const alt = './sounds/wewishyoumerrychristmas.mp3';
+      const alt = '/sounds/wewishyoumerrychristmas.mp3';
       const next = new Audio(alt);
       next.loop = true; next.preload = 'auto'; next.volume = ambientAudio.volume; next.muted = ambientAudio.muted;
       ambientAudio = next;
