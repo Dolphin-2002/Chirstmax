@@ -7,30 +7,38 @@
     <style>
       html,body{height:100%;margin:0;background:#071026;overflow:hidden}
       canvas{position:fixed;inset:0;display:block;z-index:0}
-      /* forest layer sits above the canvas and is allowed to extend upward without clipping */
-      #forest{position:fixed;left:0;bottom:0;width:100%;pointer-events:none;overflow:visible;z-index:2}
-      /* trees are absolutely positioned from the bottom of the viewport; limit max height for small screens */
-      #forest img{display:block;will-change:transform,opacity;position:absolute;bottom:0;max-height:45vh;height:auto}
+
+      /* forest layers (back + front) for parallax */
+      #forestBack,#forestFront{position:fixed;left:0;bottom:0;width:100%;pointer-events:none;overflow:visible}
+      #forestBack{z-index:1}
+      #forestFront{z-index:2}
+
+      /* tree base style (we add sizes inline) */
+      .tree{display:block;will-change:transform,opacity;position:absolute;bottom:0;height:auto}
+      /* sway animation for trees */
+      @keyframes sway { 0%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-6px) rotate(0.6deg)} 100%{transform:translateY(0) rotate(0deg)} }
+      .sway{animation-name:sway;animation-iteration-count:infinite;animation-timing-function: ease-in-out}
 
       @media (max-height:600px){
-        #forest img{max-height:30vh}
+        .tree{max-height:30vh}
       }
 
       /* moon and santa */
-      #moon{position:fixed;right:6vw;top:6vh;width:120px;height:auto;z-index:1;filter:drop-shadow(0 0 12px rgba(255,255,200,0.25))}
+      #moon{position:fixed;right:6vw;top:6vh;width:120px;height:auto;z-index:3;filter:drop-shadow(0 0 12px rgba(255,255,200,0.25))}
       @media (max-width:480px){ #moon{width:80px} }
 
-      #santa{position:fixed;top:12vh;left:-200px;height:90px;width:auto;z-index:3;pointer-events:none;will-change:transform,left}
+      #santa{position:fixed;top:12vh;left:-200px;height:90px;width:auto;z-index:4;pointer-events:none;will-change:transform,left}
 
       /* greeting container */
-      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;opacity:0;display:flex;flex-direction:column;align-items:center}
+      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;opacity:0;display:flex;flex-direction:column;align-items:center}
       svg#greeting{overflow:visible}
 
       /* celebrate button */
       #celebrateBtn{margin-top:14px;display:block;margin-left:auto;margin-right:auto;padding:10px 18px;border-radius:999px;background:linear-gradient(0deg,#ff6b6b,#ff9a9e);color:#fff;border:none;cursor:pointer;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,0.35);pointer-events:auto}
+      #celebrateBtn:focus{outline:3px solid rgba(255,255,255,0.15);}
 
       /* bible overlay and scroll box */
-      #bibleOverlay{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);backdrop-filter: blur(2px);opacity:0}
+      #bibleOverlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);backdrop-filter: blur(2px);opacity:0}
       #bibleBg{position:absolute;inset:0;object-fit:cover;opacity:0.12;filter:grayscale(10%);}
       #scrollBox{position:relative;width:80vw;max-width:900px;padding:34px 36px 44px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.6);background:linear-gradient(180deg,#f7ecd6,#efe0c2);border:3px solid rgba(80,50,20,0.15);transform-origin:center;opacity:0}
       #scrollBox h2{margin:0 0 8px;font-family: 'Segoe Script', cursive;font-size:28px;color:#5b3b1a;text-align:center}
@@ -41,364 +49,28 @@
       .angel.left{left:-24px}
       .angel.right{right:-24px}
 
+      /* close button */
+      .closeBtn{position:absolute;right:12px;top:12px;background:rgba(0,0,0,0.35);color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+
       @media (max-width:600px){
         #scrollBox{padding:22px;width:92vw}
         .angel{width:46px}
       }
+
+      /* New verse button style */
+      #newVerseBtn{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:10px;background:linear-gradient(180deg,#fff,#f2e6cf);border:1px solid rgba(0,0,0,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.12);cursor:pointer}
+      #newVerseBtn:focus{outline:3px solid rgba(0,0,0,0.08)}
+      @keyframes popIn { from{ transform: scale(0.96); opacity:0 } to { transform: scale(1); opacity:1 } }
+      .popIn { animation: popIn 420ms ease forwards }
     </style>
   </head>
   <body>
     <canvas id="snowCanvas"></canvas>
-    <script>
-      const canvas = document.getElementById('snowCanvas');
-      const ctx = canvas.getContext('2d');
-      let W, H;
-      function resize(){W = canvas.width = innerWidth; H = canvas.height = innerHeight}
-      window.addEventListener('resize', resize);
-      resize();
-
-      function rand(min, max){ return Math.random() * (max - min) + min }
-      const flakes = [];
-      function createFlake(){
-        return {
-          x: rand(0, W),
-          y: rand(-H, 0),
-          r: rand(0.5, 3.5),
-          d: rand(0.5, 2.0),
-          vx: rand(-0.5, 0.5)
-        }
-      }
-      // Initialize flakes based on screen area so larger screens get more particles
-      (function initFlakes(){
-        const DENSITY = 0.0009; // particles per pixel (tweak this to add/remove)
-        const minFlakes = 200;
-        const maxFlakes = 1200;
-        const count = Math.max(minFlakes, Math.min(maxFlakes, Math.floor(W * H * DENSITY)));
-        for(let i = 0; i < count; i++) flakes.push(createFlake());
-      })();
-
-      function update(){
-        ctx.clearRect(0,0,W,H);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        for(const f of flakes){
-          f.x += f.vx;
-          f.y += f.d;
-          if(f.y > H){ f.y = rand(-50, 0); f.x = rand(0, W); }
-          if(f.x > W) f.x = 0;
-          if(f.x < 0) f.x = W;
-          ctx.beginPath();
-          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        requestAnimationFrame(update);
-      }
-      update();
-
-      // --- Forest spam: place many tree images along the bottom to form a dense forest ---
-      (function(){
-        // container for trees
-        const forest = document.createElement('div');
-        forest.id = 'forest';
-        document.body.appendChild(forest);
-
-        // images assumed to be in src/images/1.png and src/images/2.png
-        const treeUrls = ['/src/images/1.png', '/src/images/2.png'];
-
-        function spawnForest(){
-          // ensure container matches viewport and clear previous trees
-          forest.innerHTML = '';
-          const approxTreeWidth = 80; // average width per tree in px
-          // spam factor: create many trees across the width (multiply for density)
-          const count = Math.max(40, Math.ceil(W / approxTreeWidth) * 3);
-
-          for(let i=0;i<count;i++){
-            const img = document.createElement('img');
-            img.src = treeUrls[i % treeUrls.length];
-            img.alt = 'tree';
-            // random scale and height to create depth
-            const scale = rand(0.6, 1.6);
-            const heightPx = Math.round(H * (0.10 + Math.random() * 0.20) * scale);
-            img.style.height = heightPx + 'px';
-            img.style.position = 'absolute';
-            img.style.bottom = '0';
-            // spread evenly across width with a small random offset
-            const x = Math.floor(i * (W / count) + rand(-40, 40));
-            img.style.left = x + 'px';
-            img.style.transform = 'translateY(' + Math.round(rand(-12,12)) + 'px)';
-            img.style.opacity = (0.6 + Math.random() * 0.4).toFixed(2);
-            img.style.pointerEvents = 'none';
-            forest.appendChild(img);
-          }
-        }
-
-        spawnForest();
-        // respawn forest on resize so layout stays dense
-        window.addEventListener('resize', () => { resize(); spawnForest(); });
-      })();
-
-      // --- Moon ---
-      (function(){
-        const moon = document.createElement('img');
-        moon.id = 'moon';
-        moon.src = '/src/images/4.png';
-        moon.alt = 'moon';
-        document.body.appendChild(moon);
-      })();
-
-      // --- Santa flight and greeting ---
-      (function(){
-        const santa = document.createElement('img');
-        santa.id = 'santa';
-        santa.src = '/src/images/3.png';
-        santa.alt = 'santa';
-        document.body.appendChild(santa);
-
-        // greeting container
-        const greetingWrap = document.createElement('div');
-        greetingWrap.id = 'greetingWrap';
-        document.body.appendChild(greetingWrap);
-
-        // helper easing
-        function easeInOutQuad(t){ return t<0.5 ? 2*t*t : -1+(4-2*t)*t }
-
-        let started = false;
-        let messageShown = false;
-        const duration = 6000; // ms (faster travel)
-        let santaWidth = 140;
-
-        function startAnimation(){
-          const rectEstimate = santa.getBoundingClientRect();
-          santaWidth = Math.max(rectEstimate.width || 140, 80);
-          const startTime = performance.now();
-
-          function frame(now){
-            const t = Math.min(1, (now - startTime) / duration);
-            const eased = easeInOutQuad(t);
-            // horizontal travel from left outside to right outside
-            const x = -santaWidth + (W + santaWidth*2) * eased;
-            // slight vertical sine wave
-            const amplitude = Math.min(60, H * 0.05);
-            const yOffset = Math.sin(eased * Math.PI * 2) * amplitude;
-            santa.style.left = x + 'px';
-            santa.style.top = (H * 0.12 + yOffset) + 'px';
-            // rotate slightly by velocity
-            const vx = (W + santaWidth*2) * eased;
-            const rot = Math.sin(eased * Math.PI * 2) * 8;
-            santa.style.transform = 'rotate(' + rot + 'deg)';
-
-            // when crossing center, trigger message once
-            if(!messageShown && x + santaWidth/2 > W/2){
-              messageShown = true;
-              // slight delay to mimic leaving a letter
-              setTimeout(showGreeting, 500);
-            }
-
-            if(t < 1) requestAnimationFrame(frame);
-            else {
-              // finished - optionally loop after delay
-              setTimeout(()=>{
-                // reset and run again later
-                messageShown = false;
-                setTimeout(()=>{ startAnimation() }, 2200);
-              }, 1200);
-            }
-          }
-
-          requestAnimationFrame(frame);
-        }
-
-        function showGreeting(){
-          if(document.getElementById('greeting')) return;
-          // create SVG with text and handwriting-like stroke animation
-          const SVG_NS = 'http://www.w3.org/2000/svg';
-          const svg = document.createElementNS(SVG_NS, 'svg');
-          svg.setAttribute('id','greeting');
-          // size dynamically based on viewport
-          const fontSize = Math.round(Math.min(96, W * 0.07 + H * 0.01));
-          svg.setAttribute('width', Math.min(1000, W * 0.9));
-          svg.setAttribute('height', fontSize * 1.4);
-
-          const text = document.createElementNS(SVG_NS, 'text');
-          text.setAttribute('x','50%');
-          text.setAttribute('y','60%');
-          text.setAttribute('text-anchor','middle');
-          text.setAttribute('dominant-baseline','middle');
-          text.setAttribute('font-family','cursive, "Segoe Script", "Brush Script MT", "Pacifico", sans-serif');
-          text.setAttribute('font-size', String(fontSize));
-          text.setAttribute('fill','transparent');
-          text.setAttribute('stroke','#fff');
-          text.setAttribute('stroke-width','1.8');
-          text.setAttribute('stroke-linecap','round');
-          text.setAttribute('stroke-linejoin','round');
-          text.textContent = 'Merry Christmas';
-
-          svg.appendChild(text);
-          greetingWrap.appendChild(svg);
-
-          // center and reveal
-          greetingWrap.style.opacity = '1';
-
-          // use computed text length for dash animation
-          // small timeout to ensure element is in DOM
-          setTimeout(()=>{
-            try{
-              const len = text.getComputedTextLength();
-              text.style.transition = 'stroke-dashoffset 1800ms linear';
-              text.style.strokeDasharray = len;
-              text.style.strokeDashoffset = len;
-              // force reflow then start
-              void text.getBBox();
-              requestAnimationFrame(()=>{ text.style.strokeDashoffset = '0'; });
-
-              // after stroke finishes, fade in fill
-              setTimeout(()=>{
-                text.style.transition = 'fill 600ms ease, opacity 600ms ease';
-                text.setAttribute('fill','#fff');
-                // subtle pop
-                greetingWrap.animate([{transform:'translate(-50%,-50%) scale(0.98)'},{transform:'translate(-50%,-50%) scale(1)'}],{duration:500,fill:'forwards',easing:'cubic-bezier(.2,.8,.2,1)'});
-
-                // create Celebrate button centered below the svg
-                const btn = document.createElement('button');
-                btn.id = 'celebrateBtn';
-                btn.textContent = 'Celebrate';
-                btn.addEventListener('click', onCelebrateClick);
-                // allow pointer events on container briefly
-                greetingWrap.style.pointerEvents = 'auto';
-                // insert button below svg (centered by flex column)
-                greetingWrap.appendChild(btn);
-              }, 2000);
-            }catch(e){
-              // fallback: simple fade in text
-              text.setAttribute('fill','#fff');
-              // still add button
-              const btn = document.createElement('button');
-              btn.id = 'celebrateBtn';
-              btn.textContent = 'Celebrate';
-              btn.addEventListener('click', onCelebrateClick);
-              greetingWrap.style.pointerEvents = 'auto';
-              greetingWrap.appendChild(btn);
-            }
-          }, 50);
-
-          // remove greeting after some time (optional)
-          setTimeout(()=>{
-            try{ greetingWrap.style.opacity = '0'; setTimeout(()=>greetingWrap.innerHTML = '', 900); }catch(e){}
-          }, 9000);
-        }
-
-        // --- New: celebrate transition and bible overlay ---
-        function onCelebrateClick(e){
-          const btn = e.currentTarget;
-          btn.disabled = true; btn.style.cursor = 'default';
-          morphToBiblePage();
-        }
-
-        function morphToBiblePage(){
-          const forestEl = document.getElementById('forest');
-          const moonEl = document.getElementById('moon');
-          const santaEl = document.getElementById('santa');
-          const overlayAnimTime = 1200;
-
-          // animate forest down and fade
-          if(forestEl){
-            forestEl.animate([
-              { transform: 'translateY(0) scale(1)', opacity: 1 },
-              { transform: 'translateY(40vh) scale(0.95)', opacity: 0 }
-            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
-          }
-
-          // moon: move back/up and fade slightly
-          if(moonEl){
-            moonEl.animate([
-              { transform: 'translateY(0) scale(1)', opacity: 1 },
-              { transform: 'translateY(-8vh) scale(0.6)', opacity: 0.4 }
-            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
-          }
-
-          // santa: fly away and fade
-          if(santaEl){
-            santaEl.animate([
-              { transform: getComputedStyle(santaEl).transform || 'none', opacity: 1 },
-              { transform: 'translateX(' + (W * 0.7) + 'px) translateY(-40vh) rotate(-20deg)', opacity: 0 }
-            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
-          }
-
-          // fade canvas a bit
-          canvas.animate([{ opacity: 1 }, { opacity: 0.09 }], { duration: overlayAnimTime, fill: 'forwards', easing: 'ease' });
-
-          // hide greeting
-          greetingWrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: 'forwards' });
-
-          // after animation ends, show bible page
-          setTimeout(showBiblePage, overlayAnimTime + 180);
-        }
-
-        function showBiblePage(){
-          // pick or retrieve a random verse index and persist
-          const verses = [
-            'Luke 2:11 – “For unto you is born this day in the city of David a Savior, which is Christ the Lord.”',
-            'Isaiah 9:6 – “For unto us a child is born, unto us a son is given: and the government shall be upon his shoulder, and his name shall be called Wonderful, Counsellor, The mighty God, The everlasting Father, The Prince of Peace.”',
-            'Matthew 1:23 – “Behold, a virgin shall be with child, and shall bring forth a son, and they shall call his name Emmanuel, which being interpreted is, God with us.”',
-            'John 1:14 – “And the Word was made flesh, and dwelt among us, (and we beheld his glory, the glory as of the only begotten of the Father,) full of grace and truth.”',
-            'Luke 2:14 – “Glory to God in the highest, and on earth peace, good will toward men.”'
-          ];
-
-          let idx = localStorage.getItem('christmasVerseIndex');
-          if(idx === null){ idx = Math.floor(Math.random() * verses.length); localStorage.setItem('christmasVerseIndex', String(idx)); }
-          else idx = parseInt(idx,10);
-
-          const overlay = document.createElement('div');
-          overlay.id = 'bibleOverlay';
-
-          const bg = document.createElement('img');
-          bg.id = 'bibleBg';
-          // public folder image 5
-          bg.src = '/5.png';
-          bg.alt = 'bg';
-          overlay.appendChild(bg);
-
-          const box = document.createElement('div');
-          box.id = 'scrollBox';
-
-          // angels
-          const angelL = document.createElement('img'); angelL.className = 'angel left'; angelL.src = '/6.png'; angelL.alt = 'angel';
-          const angelR = document.createElement('img'); angelR.className = 'angel right'; angelR.src = '/6.png'; angelR.alt = 'angel';
-          box.appendChild(angelL);
-          box.appendChild(angelR);
-
-          const title = document.createElement('h2'); title.textContent = 'A Christmas Reflection';
-          box.appendChild(title);
-
-          const versePara = document.createElement('p');
-          versePara.textContent = verses[idx];
-          box.appendChild(versePara);
-
-          overlay.appendChild(box);
-          document.body.appendChild(overlay);
-
-          // animate overlay fade and box pop
-          overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600, fill: 'forwards', easing: 'ease-out' });
-
-          box.animate([{ transform: 'translateY(10px) scale(0.98)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 700, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)' });
-
-          // angels appear with slight bounce
-          angelL.animate([{ transform: 'translateY(-6px) scale(0.8)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 700, delay: 180, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)'});
-          angelR.animate([{ transform: 'translateY(-6px) scaleX(-0.8)', opacity: 0 }, { transform: 'translateY(0) scaleX(-1)', opacity: 1 }], { duration: 700, delay: 240, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)'});
-
-          // allow user to close by clicking background (optional) or keep it static
-          overlay.addEventListener('click', (ev)=>{
-            if(ev.target === overlay){
-              // reverse animation and remove
-              const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
-              anim.onfinish = ()=> overlay.remove();
-            }
-          });
-        }
-
-        // start after small delay to let images load (faster)
-        setTimeout(()=>{ startAnimation(); }, 300);
-      })();
-
-    </script>
+    <!-- forest layers -->
+    <div id="forestBack" aria-hidden="true"></div>
+    <div id="forestFront" aria-hidden="true"></div>
+    <!-- load extracted scene script (public/scene.js) -->
+    <script src="/scene.js" defer></script>
+    <!-- audio file expected at /sounds/sleigh.mp3 (optional) -->
   </body>
 </html>
