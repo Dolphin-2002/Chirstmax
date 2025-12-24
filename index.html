@@ -23,8 +23,28 @@
       #santa{position:fixed;top:12vh;left:-200px;height:90px;width:auto;z-index:3;pointer-events:none;will-change:transform,left}
 
       /* greeting container */
-      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;opacity:0}
+      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;opacity:0;display:flex;flex-direction:column;align-items:center}
       svg#greeting{overflow:visible}
+
+      /* celebrate button */
+      #celebrateBtn{margin-top:14px;display:block;margin-left:auto;margin-right:auto;padding:10px 18px;border-radius:999px;background:linear-gradient(0deg,#ff6b6b,#ff9a9e);color:#fff;border:none;cursor:pointer;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,0.35);pointer-events:auto}
+
+      /* bible overlay and scroll box */
+      #bibleOverlay{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);backdrop-filter: blur(2px);opacity:0}
+      #bibleBg{position:absolute;inset:0;object-fit:cover;opacity:0.12;filter:grayscale(10%);}
+      #scrollBox{position:relative;width:80vw;max-width:900px;padding:34px 36px 44px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.6);background:linear-gradient(180deg,#f7ecd6,#efe0c2);border:3px solid rgba(80,50,20,0.15);transform-origin:center;opacity:0}
+      #scrollBox h2{margin:0 0 8px;font-family: 'Segoe Script', cursive;font-size:28px;color:#5b3b1a;text-align:center}
+      #scrollBox p{color:#2b2b2b;line-height:1.6;font-size:18px;margin:8px 0}
+
+      /* angels at the top corners of the scroll box */
+      .angel{position:absolute;top:-28px;width:72px;height:auto;opacity:0;transform-origin:center;}
+      .angel.left{left:-24px}
+      .angel.right{right:-24px}
+
+      @media (max-width:600px){
+        #scrollBox{padding:22px;width:92vw}
+        .angel{width:46px}
+      }
     </style>
   </head>
   <body>
@@ -143,7 +163,7 @@
 
         let started = false;
         let messageShown = false;
-        const duration = 9000; // ms
+        const duration = 6000; // ms (faster travel)
         let santaWidth = 140;
 
         function startAnimation(){
@@ -170,7 +190,7 @@
             if(!messageShown && x + santaWidth/2 > W/2){
               messageShown = true;
               // slight delay to mimic leaving a letter
-              setTimeout(showGreeting, 900);
+              setTimeout(showGreeting, 500);
             }
 
             if(t < 1) requestAnimationFrame(frame);
@@ -223,7 +243,7 @@
           setTimeout(()=>{
             try{
               const len = text.getComputedTextLength();
-              text.style.transition = 'stroke-dashoffset 3000ms linear';
+              text.style.transition = 'stroke-dashoffset 1800ms linear';
               text.style.strokeDasharray = len;
               text.style.strokeDashoffset = len;
               // force reflow then start
@@ -232,14 +252,31 @@
 
               // after stroke finishes, fade in fill
               setTimeout(()=>{
-                text.style.transition = 'fill 800ms ease, opacity 800ms ease';
+                text.style.transition = 'fill 600ms ease, opacity 600ms ease';
                 text.setAttribute('fill','#fff');
                 // subtle pop
-                greetingWrap.animate([{transform:'translate(-50%,-50%) scale(0.98)'},{transform:'translate(-50%,-50%) scale(1)'}],{duration:600,fill:'forwards',easing:'cubic-bezier(.2,.8,.2,1)'});
-              }, 3200);
+                greetingWrap.animate([{transform:'translate(-50%,-50%) scale(0.98)'},{transform:'translate(-50%,-50%) scale(1)'}],{duration:500,fill:'forwards',easing:'cubic-bezier(.2,.8,.2,1)'});
+
+                // create Celebrate button centered below the svg
+                const btn = document.createElement('button');
+                btn.id = 'celebrateBtn';
+                btn.textContent = 'Celebrate';
+                btn.addEventListener('click', onCelebrateClick);
+                // allow pointer events on container briefly
+                greetingWrap.style.pointerEvents = 'auto';
+                // insert button below svg (centered by flex column)
+                greetingWrap.appendChild(btn);
+              }, 2000);
             }catch(e){
               // fallback: simple fade in text
               text.setAttribute('fill','#fff');
+              // still add button
+              const btn = document.createElement('button');
+              btn.id = 'celebrateBtn';
+              btn.textContent = 'Celebrate';
+              btn.addEventListener('click', onCelebrateClick);
+              greetingWrap.style.pointerEvents = 'auto';
+              greetingWrap.appendChild(btn);
             }
           }, 50);
 
@@ -249,8 +286,117 @@
           }, 9000);
         }
 
-        // start after small delay to let images load
-        setTimeout(()=>{ startAnimation(); }, 700);
+        // --- New: celebrate transition and bible overlay ---
+        function onCelebrateClick(e){
+          const btn = e.currentTarget;
+          btn.disabled = true; btn.style.cursor = 'default';
+          morphToBiblePage();
+        }
+
+        function morphToBiblePage(){
+          const forestEl = document.getElementById('forest');
+          const moonEl = document.getElementById('moon');
+          const santaEl = document.getElementById('santa');
+          const overlayAnimTime = 1200;
+
+          // animate forest down and fade
+          if(forestEl){
+            forestEl.animate([
+              { transform: 'translateY(0) scale(1)', opacity: 1 },
+              { transform: 'translateY(40vh) scale(0.95)', opacity: 0 }
+            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+          }
+
+          // moon: move back/up and fade slightly
+          if(moonEl){
+            moonEl.animate([
+              { transform: 'translateY(0) scale(1)', opacity: 1 },
+              { transform: 'translateY(-8vh) scale(0.6)', opacity: 0.4 }
+            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+          }
+
+          // santa: fly away and fade
+          if(santaEl){
+            santaEl.animate([
+              { transform: getComputedStyle(santaEl).transform || 'none', opacity: 1 },
+              { transform: 'translateX(' + (W * 0.7) + 'px) translateY(-40vh) rotate(-20deg)', opacity: 0 }
+            ], { duration: overlayAnimTime, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+          }
+
+          // fade canvas a bit
+          canvas.animate([{ opacity: 1 }, { opacity: 0.09 }], { duration: overlayAnimTime, fill: 'forwards', easing: 'ease' });
+
+          // hide greeting
+          greetingWrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: 'forwards' });
+
+          // after animation ends, show bible page
+          setTimeout(showBiblePage, overlayAnimTime + 180);
+        }
+
+        function showBiblePage(){
+          // pick or retrieve a random verse index and persist
+          const verses = [
+            'Luke 2:11 – “For unto you is born this day in the city of David a Savior, which is Christ the Lord.”',
+            'Isaiah 9:6 – “For unto us a child is born, unto us a son is given: and the government shall be upon his shoulder, and his name shall be called Wonderful, Counsellor, The mighty God, The everlasting Father, The Prince of Peace.”',
+            'Matthew 1:23 – “Behold, a virgin shall be with child, and shall bring forth a son, and they shall call his name Emmanuel, which being interpreted is, God with us.”',
+            'John 1:14 – “And the Word was made flesh, and dwelt among us, (and we beheld his glory, the glory as of the only begotten of the Father,) full of grace and truth.”',
+            'Luke 2:14 – “Glory to God in the highest, and on earth peace, good will toward men.”'
+          ];
+
+          let idx = localStorage.getItem('christmasVerseIndex');
+          if(idx === null){ idx = Math.floor(Math.random() * verses.length); localStorage.setItem('christmasVerseIndex', String(idx)); }
+          else idx = parseInt(idx,10);
+
+          const overlay = document.createElement('div');
+          overlay.id = 'bibleOverlay';
+
+          const bg = document.createElement('img');
+          bg.id = 'bibleBg';
+          // public folder image 5
+          bg.src = '/5.png';
+          bg.alt = 'bg';
+          overlay.appendChild(bg);
+
+          const box = document.createElement('div');
+          box.id = 'scrollBox';
+
+          // angels
+          const angelL = document.createElement('img'); angelL.className = 'angel left'; angelL.src = '/6.png'; angelL.alt = 'angel';
+          const angelR = document.createElement('img'); angelR.className = 'angel right'; angelR.src = '/6.png'; angelR.alt = 'angel';
+          box.appendChild(angelL);
+          box.appendChild(angelR);
+
+          const title = document.createElement('h2'); title.textContent = 'A Christmas Reflection';
+          box.appendChild(title);
+
+          const versePara = document.createElement('p');
+          versePara.textContent = verses[idx];
+          box.appendChild(versePara);
+
+          overlay.appendChild(box);
+          document.body.appendChild(overlay);
+
+          // animate overlay fade and box pop
+          overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600, fill: 'forwards', easing: 'ease-out' });
+
+          box.animate([{ transform: 'translateY(10px) scale(0.98)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 700, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)' });
+
+          // angels appear with slight bounce
+          angelL.animate([{ transform: 'translateY(-6px) scale(0.8)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 700, delay: 180, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)'});
+          angelR.animate([{ transform: 'translateY(-6px) scaleX(-0.8)', opacity: 0 }, { transform: 'translateY(0) scaleX(-1)', opacity: 1 }], { duration: 700, delay: 240, fill: 'forwards', easing: 'cubic-bezier(.2,.8,.2,1)'});
+
+          // allow user to close by clicking background (optional) or keep it static
+          overlay.addEventListener('click', (ev)=>{
+            if(ev.target === overlay){
+              // reverse animation and remove
+              const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
+              anim.onfinish = ()=> overlay.remove();
+            }
+          });
+        }
+
+        // start after small delay to let images load (faster)
+        setTimeout(()=>{ startAnimation(); }, 300);
       })();
 
     </script>
