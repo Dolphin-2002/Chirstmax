@@ -6,48 +6,71 @@
     <title>Christmas Card</title>
     <style>
       html,body{height:100%;margin:0;background:#071026;overflow:hidden}
-      canvas{position:fixed;inset:0;display:block}
+      canvas{position:fixed;inset:0;display:block;z-index:0}
+
+      /* forest layers (back + front) for parallax */
+      #forestBack,#forestFront{position:fixed;left:0;bottom:0;width:100%;pointer-events:none;overflow:visible}
+      #forestBack{z-index:1}
+      #forestFront{z-index:2}
+
+      /* tree base style (we add sizes inline) */
+      .tree{display:block;will-change:transform,opacity;position:absolute;bottom:0;height:auto}
+      /* sway animation for trees */
+      @keyframes sway { 0%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-6px) rotate(0.6deg)} 100%{transform:translateY(0) rotate(0deg)} }
+      .sway{animation-name:sway;animation-iteration-count:infinite;animation-timing-function: ease-in-out}
+
+      @media (max-height:600px){
+        .tree{max-height:30vh}
+      }
+
+      /* moon and santa */
+      #moon{position:fixed;right:6vw;top:6vh;width:120px;height:auto;z-index:3;filter:drop-shadow(0 0 12px rgba(255,255,200,0.25))}
+      @media (max-width:480px){ #moon{width:80px} }
+
+      #santa{position:fixed;top:12vh;left:-200px;height:90px;width:auto;z-index:4;pointer-events:none;will-change:transform,left}
+
+      /* greeting container */
+      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;opacity:0;display:flex;flex-direction:column;align-items:center}
+      svg#greeting{overflow:visible}
+
+      /* celebrate button */
+      #celebrateBtn{margin-top:14px;display:block;margin-left:auto;margin-right:auto;padding:10px 18px;border-radius:999px;background:linear-gradient(0deg,#ff6b6b,#ff9a9e);color:#fff;border:none;cursor:pointer;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,0.35);pointer-events:auto}
+      #celebrateBtn:focus{outline:3px solid rgba(255,255,255,0.15);}
+
+      /* bible overlay and scroll box */
+      #bibleOverlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);backdrop-filter: blur(2px);opacity:0}
+      #bibleBg{position:absolute;inset:0;object-fit:cover;opacity:0.12;filter:grayscale(10%);}
+      #scrollBox{position:relative;width:80vw;max-width:900px;padding:34px 36px 44px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.6);background:linear-gradient(180deg,#f7ecd6,#efe0c2);border:3px solid rgba(80,50,20,0.15);transform-origin:center;opacity:0}
+      #scrollBox h2{margin:0 0 8px;font-family: 'Segoe Script', cursive;font-size:28px;color:#5b3b1a;text-align:center}
+      #scrollBox p{color:#2b2b2b;line-height:1.6;font-size:18px;margin:8px 0}
+
+      /* angels at the top corners of the scroll box */
+      .angel{position:absolute;top:-28px;width:72px;height:auto;opacity:0;transform-origin:center;}
+      .angel.left{left:-24px}
+      .angel.right{right:-24px}
+
+      /* close button */
+      .closeBtn{position:absolute;right:12px;top:12px;background:rgba(0,0,0,0.35);color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+
+      @media (max-width:600px){
+        #scrollBox{padding:22px;width:92vw}
+        .angel{width:46px}
+      }
+
+      /* New verse button style */
+      #newVerseBtn{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:10px;background:linear-gradient(180deg,#fff,#f2e6cf);border:1px solid rgba(0,0,0,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.12);cursor:pointer}
+      #newVerseBtn:focus{outline:3px solid rgba(0,0,0,0.08)}
+      @keyframes popIn { from{ transform: scale(0.96); opacity:0 } to { transform: scale(1); opacity:1 } }
+      .popIn { animation: popIn 420ms ease forwards }
     </style>
   </head>
   <body>
     <canvas id="snowCanvas"></canvas>
-    <script>
-      const canvas = document.getElementById('snowCanvas');
-      const ctx = canvas.getContext('2d');
-      let W, H;
-      function resize(){W = canvas.width = innerWidth; H = canvas.height = innerHeight}
-      window.addEventListener('resize', resize);
-      resize();
-
-      function rand(min, max){ return Math.random() * (max - min) + min }
-      const flakes = [];
-      function createFlake(){
-        return {
-          x: rand(0, W),
-          y: rand(-H, 0),
-          r: rand(0.5, 3.5),
-          d: rand(0.5, 2.0),
-          vx: rand(-0.5, 0.5)
-        }
-      }
-      for(let i=0;i<160;i++) flakes.push(createFlake());
-
-      function update(){
-        ctx.clearRect(0,0,W,H);
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        for(const f of flakes){
-          f.x += f.vx;
-          f.y += f.d;
-          if(f.y > H){ f.y = rand(-50, 0); f.x = rand(0, W); }
-          if(f.x > W) f.x = 0;
-          if(f.x < 0) f.x = W;
-          ctx.beginPath();
-          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        requestAnimationFrame(update);
-      }
-      update();
-    </script>
+    <!-- forest layers -->
+    <div id="forestBack" aria-hidden="true"></div>
+    <div id="forestFront" aria-hidden="true"></div>
+    <!-- load extracted scene script (public/scene.js) -->
+    <script src="/scene.js" defer></script>
+    <!-- audio file expected at /sounds/sleigh.mp3 (optional) -->
   </body>
 </html>
