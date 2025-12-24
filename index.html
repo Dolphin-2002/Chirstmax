@@ -6,7 +6,25 @@
     <title>Christmas Card</title>
     <style>
       html,body{height:100%;margin:0;background:#071026;overflow:hidden}
-      canvas{position:fixed;inset:0;display:block}
+      canvas{position:fixed;inset:0;display:block;z-index:0}
+      /* forest layer sits above the canvas and is allowed to extend upward without clipping */
+      #forest{position:fixed;left:0;bottom:0;width:100%;pointer-events:none;overflow:visible;z-index:2}
+      /* trees are absolutely positioned from the bottom of the viewport; limit max height for small screens */
+      #forest img{display:block;will-change:transform,opacity;position:absolute;bottom:0;max-height:45vh;height:auto}
+
+      @media (max-height:600px){
+        #forest img{max-height:30vh}
+      }
+
+      /* moon and santa */
+      #moon{position:fixed;right:6vw;top:6vh;width:120px;height:auto;z-index:1;filter:drop-shadow(0 0 12px rgba(255,255,200,0.25))}
+      @media (max-width:480px){ #moon{width:80px} }
+
+      #santa{position:fixed;top:12vh;left:-200px;height:90px;width:auto;z-index:3;pointer-events:none;will-change:transform,left}
+
+      /* greeting container */
+      #greetingWrap{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;opacity:0}
+      svg#greeting{overflow:visible}
     </style>
   </head>
   <body>
@@ -30,7 +48,14 @@
           vx: rand(-0.5, 0.5)
         }
       }
-      for(let i=0;i<160;i++) flakes.push(createFlake());
+      // Initialize flakes based on screen area so larger screens get more particles
+      (function initFlakes(){
+        const DENSITY = 0.0009; // particles per pixel (tweak this to add/remove)
+        const minFlakes = 200;
+        const maxFlakes = 1200;
+        const count = Math.max(minFlakes, Math.min(maxFlakes, Math.floor(W * H * DENSITY)));
+        for(let i = 0; i < count; i++) flakes.push(createFlake());
+      })();
 
       function update(){
         ctx.clearRect(0,0,W,H);
@@ -48,6 +73,186 @@
         requestAnimationFrame(update);
       }
       update();
+
+      // --- Forest spam: place many tree images along the bottom to form a dense forest ---
+      (function(){
+        // container for trees
+        const forest = document.createElement('div');
+        forest.id = 'forest';
+        document.body.appendChild(forest);
+
+        // images assumed to be in src/images/1.png and src/images/2.png
+        const treeUrls = ['/src/images/1.png', '/src/images/2.png'];
+
+        function spawnForest(){
+          // ensure container matches viewport and clear previous trees
+          forest.innerHTML = '';
+          const approxTreeWidth = 80; // average width per tree in px
+          // spam factor: create many trees across the width (multiply for density)
+          const count = Math.max(40, Math.ceil(W / approxTreeWidth) * 3);
+
+          for(let i=0;i<count;i++){
+            const img = document.createElement('img');
+            img.src = treeUrls[i % treeUrls.length];
+            img.alt = 'tree';
+            // random scale and height to create depth
+            const scale = rand(0.6, 1.6);
+            const heightPx = Math.round(H * (0.10 + Math.random() * 0.20) * scale);
+            img.style.height = heightPx + 'px';
+            img.style.position = 'absolute';
+            img.style.bottom = '0';
+            // spread evenly across width with a small random offset
+            const x = Math.floor(i * (W / count) + rand(-40, 40));
+            img.style.left = x + 'px';
+            img.style.transform = 'translateY(' + Math.round(rand(-12,12)) + 'px)';
+            img.style.opacity = (0.6 + Math.random() * 0.4).toFixed(2);
+            img.style.pointerEvents = 'none';
+            forest.appendChild(img);
+          }
+        }
+
+        spawnForest();
+        // respawn forest on resize so layout stays dense
+        window.addEventListener('resize', () => { resize(); spawnForest(); });
+      })();
+
+      // --- Moon ---
+      (function(){
+        const moon = document.createElement('img');
+        moon.id = 'moon';
+        moon.src = '/src/images/4.png';
+        moon.alt = 'moon';
+        document.body.appendChild(moon);
+      })();
+
+      // --- Santa flight and greeting ---
+      (function(){
+        const santa = document.createElement('img');
+        santa.id = 'santa';
+        santa.src = '/src/images/3.png';
+        santa.alt = 'santa';
+        document.body.appendChild(santa);
+
+        // greeting container
+        const greetingWrap = document.createElement('div');
+        greetingWrap.id = 'greetingWrap';
+        document.body.appendChild(greetingWrap);
+
+        // helper easing
+        function easeInOutQuad(t){ return t<0.5 ? 2*t*t : -1+(4-2*t)*t }
+
+        let started = false;
+        let messageShown = false;
+        const duration = 9000; // ms
+        let santaWidth = 140;
+
+        function startAnimation(){
+          const rectEstimate = santa.getBoundingClientRect();
+          santaWidth = Math.max(rectEstimate.width || 140, 80);
+          const startTime = performance.now();
+
+          function frame(now){
+            const t = Math.min(1, (now - startTime) / duration);
+            const eased = easeInOutQuad(t);
+            // horizontal travel from left outside to right outside
+            const x = -santaWidth + (W + santaWidth*2) * eased;
+            // slight vertical sine wave
+            const amplitude = Math.min(60, H * 0.05);
+            const yOffset = Math.sin(eased * Math.PI * 2) * amplitude;
+            santa.style.left = x + 'px';
+            santa.style.top = (H * 0.12 + yOffset) + 'px';
+            // rotate slightly by velocity
+            const vx = (W + santaWidth*2) * eased;
+            const rot = Math.sin(eased * Math.PI * 2) * 8;
+            santa.style.transform = 'rotate(' + rot + 'deg)';
+
+            // when crossing center, trigger message once
+            if(!messageShown && x + santaWidth/2 > W/2){
+              messageShown = true;
+              // slight delay to mimic leaving a letter
+              setTimeout(showGreeting, 900);
+            }
+
+            if(t < 1) requestAnimationFrame(frame);
+            else {
+              // finished - optionally loop after delay
+              setTimeout(()=>{
+                // reset and run again later
+                messageShown = false;
+                setTimeout(()=>{ startAnimation() }, 2200);
+              }, 1200);
+            }
+          }
+
+          requestAnimationFrame(frame);
+        }
+
+        function showGreeting(){
+          if(document.getElementById('greeting')) return;
+          // create SVG with text and handwriting-like stroke animation
+          const SVG_NS = 'http://www.w3.org/2000/svg';
+          const svg = document.createElementNS(SVG_NS, 'svg');
+          svg.setAttribute('id','greeting');
+          // size dynamically based on viewport
+          const fontSize = Math.round(Math.min(96, W * 0.07 + H * 0.01));
+          svg.setAttribute('width', Math.min(1000, W * 0.9));
+          svg.setAttribute('height', fontSize * 1.4);
+
+          const text = document.createElementNS(SVG_NS, 'text');
+          text.setAttribute('x','50%');
+          text.setAttribute('y','60%');
+          text.setAttribute('text-anchor','middle');
+          text.setAttribute('dominant-baseline','middle');
+          text.setAttribute('font-family','cursive, "Segoe Script", "Brush Script MT", "Pacifico", sans-serif');
+          text.setAttribute('font-size', String(fontSize));
+          text.setAttribute('fill','transparent');
+          text.setAttribute('stroke','#fff');
+          text.setAttribute('stroke-width','1.8');
+          text.setAttribute('stroke-linecap','round');
+          text.setAttribute('stroke-linejoin','round');
+          text.textContent = 'Merry Christmas';
+
+          svg.appendChild(text);
+          greetingWrap.appendChild(svg);
+
+          // center and reveal
+          greetingWrap.style.opacity = '1';
+
+          // use computed text length for dash animation
+          // small timeout to ensure element is in DOM
+          setTimeout(()=>{
+            try{
+              const len = text.getComputedTextLength();
+              text.style.transition = 'stroke-dashoffset 3000ms linear';
+              text.style.strokeDasharray = len;
+              text.style.strokeDashoffset = len;
+              // force reflow then start
+              void text.getBBox();
+              requestAnimationFrame(()=>{ text.style.strokeDashoffset = '0'; });
+
+              // after stroke finishes, fade in fill
+              setTimeout(()=>{
+                text.style.transition = 'fill 800ms ease, opacity 800ms ease';
+                text.setAttribute('fill','#fff');
+                // subtle pop
+                greetingWrap.animate([{transform:'translate(-50%,-50%) scale(0.98)'},{transform:'translate(-50%,-50%) scale(1)'}],{duration:600,fill:'forwards',easing:'cubic-bezier(.2,.8,.2,1)'});
+              }, 3200);
+            }catch(e){
+              // fallback: simple fade in text
+              text.setAttribute('fill','#fff');
+            }
+          }, 50);
+
+          // remove greeting after some time (optional)
+          setTimeout(()=>{
+            try{ greetingWrap.style.opacity = '0'; setTimeout(()=>greetingWrap.innerHTML = '', 900); }catch(e){}
+          }, 9000);
+        }
+
+        // start after small delay to let images load
+        setTimeout(()=>{ startAnimation(); }, 700);
+      })();
+
     </script>
   </body>
 </html>
