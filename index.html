@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <base href="./">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Christmas Card</title>
@@ -65,13 +66,31 @@
     </style>
   </head>
   <body>
+    <noscript>
+      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#071026;color:#fff;font-family:sans-serif;z-index:9999">JavaScript is required to view this card — please enable JavaScript.</div>
+    </noscript>
+    <!-- Visible fallback for quick verification if scene fails -->
+    <div id="fallbackMessage" style="position:fixed;left:12px;top:12px;color:#fff;font-family:sans-serif;z-index:999">Loading…</div>
     <canvas id="snowCanvas"></canvas>
     <!-- forest layers -->
     <div id="forestBack" aria-hidden="true"></div>
     <div id="forestFront" aria-hidden="true"></div>
 
     <!-- load extracted scene script (public/scene.js) -->
-    <script src="/scene.js" defer></script>
+    <script src="./scene.js" defer></script>
     <!-- audio file expected at /sounds/sleigh.mp3 (optional) -->
+
+    <script>
+      // Diagnostic helpers: display load / error status in the fallback area
+      (function(){
+        const fb = document.getElementById('fallbackMessage');
+        function show(msg){ if(fb) fb.textContent = msg; }
+        window.addEventListener('load', ()=>{ show('Loaded — running scripts'); setTimeout(()=>{ if(fb) fb.style.display='none'; }, 1200); });
+        window.addEventListener('error', (ev)=>{ console.error(ev); show('Error: ' + (ev && ev.message || 'Script error')); if(fb) fb.style.color='#ff8b8b'; });
+        window.addEventListener('unhandledrejection', (ev)=>{ console.error(ev); show('Promise error: ' + (ev && ev.reason && ev.reason.message || ev && ev.reason || 'rejection')); if(fb) fb.style.color='#ff8b8b'; });
+        // timeout if nothing happens (network or missing file)
+        setTimeout(()=>{ if(fb && fb.textContent === 'Loading…') show('Timeout: script did not run'); }, 4000);
+      })();
+    </script>
   </body>
 </html>
